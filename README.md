@@ -15,7 +15,12 @@ az ad sp create-for-rbac --sdk-auth > <give it a name>.azureauth
 Use the following values from the created file, and include them in the local.settings.json
 
 `"AZURE_AUTH_CLIENT" : "<clientId>",`
+
 `"AZURE_AUTH_SECRET" : "<clientSecret>",`
+
 `"AZURE_AUTH_TENANT" : "<tenantId>",`
+
 `"RG_LOCATION":"<requested region>",`
+
 `"RG_NAME" : "<resource group name>"`
+
