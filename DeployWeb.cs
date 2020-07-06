@@ -30,7 +30,11 @@ using Microsoft.Azure.Management.ResourceManager.Fluent.Core;
 
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
+
 using System.Collections.Generic;
+
+
+using System.Text;
 
 
 namespace webdeploy
@@ -38,7 +42,8 @@ namespace webdeploy
     public static class DeployWeb
     {
         static string KEY1 = "key1";
-
+        static string WEB = "$web";
+        
         [FunctionName("DeployWeb")]
         public static async Task<IActionResult> Run(
             [HttpTrigger(AuthorizationLevel.Function, "get", "post", Route = null)] HttpRequest req,
@@ -60,9 +65,71 @@ namespace webdeploy
 
             string region = Environment.GetEnvironmentVariable("RG_LOCATION");
             string rgName = Environment.GetEnvironmentVariable("RG_NAME");
+           
+
+            string saConnection = CreateStaticWeb(siteName, rgName, region, azure, log);
+
+            string endpoint = Upload2Site(saConnection,log);
+            
+            dynamic result = new System.Dynamic.ExpandoObject();
+            result.siteName = siteName;
+            result.connectionString = saConnection;
+            result.endPoint = endpoint;
+            string response = JsonConvert.SerializeObject(result);
+            string responseMessage = $"{response}";
+
+            return new OkObjectResult(responseMessage);
+        }
+
+        private static string GetStorageConnectionString(string keyValue, string accountName, ILogger log)
+        {
+            string connectionString = $"DefaultEndpointsProtocol=https;AccountName={accountName};AccountKey={keyValue};EndpointSuffix=core.windows.net";
+            log.LogInformation($"DeployWeb: Created connection string to storage {connectionString}");
+            return connectionString;  
+        }
+
+        // copy all files from source blob container specified in settings to the target $web container
+        private static string Upload2Site(string targetCS, ILogger log)
+        {
+            string endpoint = string.Empty;
+            string sourceCS = Environment.GetEnvironmentVariable("SOURCE_SITE_CS");
+            string sourceContainer = Environment.GetEnvironmentVariable("SOURCE_SITE_CONTAINER");
+
+            string sasToken = Environment.GetEnvironmentVariable("SAS");
+
+            log.LogInformation($"DeployWeb::Upload2Site got CS, source: {sourceCS}\n target: {targetCS}");
+            BlobServiceClient sourceBlobServiceClient = new BlobServiceClient(sourceCS); 
+            BlobServiceClient targetBlobServiceClient = new BlobServiceClient(targetCS); 
+            log.LogInformation($"DeployWeb::Upload2Site got 2 blob service clients");
+
+            BlobContainerClient sourceContainerClient = sourceBlobServiceClient.GetBlobContainerClient(sourceContainer); 
+            BlobContainerClient targetContainerClient = targetBlobServiceClient.GetBlobContainerClient(WEB);
+
+            // BlobStaticWebsite site = 
+            log.LogInformation($"DeployWeb::Upload2Site got 2 blob container clients");
+
+            foreach (BlobItem item in sourceContainerClient.GetBlobs())
+            {
+ 
+                BlobClient source = sourceContainerClient.GetBlobClient(item.Name);
+                Uri uri = new Uri($"{source.Uri}{sasToken}");
+                BlobClient destination = targetContainerClient.GetBlobClient(item.Name);             
+                destination.StartCopyFromUri(uri);
+                
+            }
+            
+            endpoint = $"https://{targetBlobServiceClient.AccountName}.z16.web.core.windows.net/";
+
+            return endpoint;
+        }
+
+
+        private static string CreateStaticWeb(string storageName, string rgName, string region, IAzure azureContext, ILogger log)
+        {
+            string connectionString = string.Empty;
 
             Microsoft.Azure.Management.Storage.Fluent.IStorageAccount storageAccount = 
-                        azure.StorageAccounts.Define(siteName).
+                        azureContext.StorageAccounts.Define(storageName).
                         WithRegion(region).
                         WithExistingResourceGroup(rgName).
                         WithGeneralPurposeAccountKindV2().
@@ -76,33 +143,21 @@ namespace webdeploy
                 if(item.KeyName.Equals(KEY1)) key = item.Value; 
             }
             // need to set the storage properties to enable static web site
-            string cs = GetStorageConnectionString(key,siteName,log);
-            BlobServiceClient blobServiceClient = new BlobServiceClient(cs);            
+            connectionString = GetStorageConnectionString(key,storageName,log);
+            BlobServiceClient blobServiceClient = new BlobServiceClient(connectionString);            
             BlobServiceProperties myProps = blobServiceClient.GetProperties();
         
             myProps.StaticWebsite.Enabled = true;
             myProps.StaticWebsite.IndexDocument = "index.html";            
-            myProps.StaticWebsite.ErrorDocument404Path = "error.html";                        
+            myProps.StaticWebsite.ErrorDocument404Path = "error/index.html";  
+            log.LogInformation(myProps.StaticWebsite.ToString());
+                                  
             
             blobServiceClient.SetProperties(myProps);
-            log.LogInformation("DeployWeb: got static web enabled");
-            
-            dynamic result = new System.Dynamic.ExpandoObject();
-            result.siteName = siteName;
-            result.connectionString = cs;
-            string response = JsonConvert.SerializeObject(result);
-            string responseMessage = $"{response}";
+            log.LogInformation("DeployWeb: got static web enabled");            
 
-            return new OkObjectResult(responseMessage);
+            return connectionString;
         }
-
-        private static string GetStorageConnectionString(string keyValue, string accountName, ILogger log)
-        {
-            string connectionString = $"DefaultEndpointsProtocol=https;AccountName={accountName};AccountKey={keyValue};EndpointSuffix=core.windows.net";
-            log.LogInformation($"DeployWeb: get connection string to storage {connectionString}");
-            return connectionString;  
-        }
-
         private static IAzure CreateAzureContect(ILogger log)
         {
             string clientId = Environment.GetEnvironmentVariable("AZURE_AUTH_CLIENT");
