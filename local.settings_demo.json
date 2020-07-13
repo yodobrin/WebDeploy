@@ -1,0 +1,16 @@
+{
+    "IsEncrypted": false,
+    "Values": {
+        "AzureWebJobsStorage": "",
+        "FUNCTIONS_WORKER_RUNTIME": "dotnet",
+        "AZURE_AUTH_CLIENT" : "",
+        "AZURE_AUTH_SECRET" : "",
+        "AZURE_AUTH_TENANT" : "",
+        "RG_LOCATION":"",
+        "RG_NUMBER": "",
+        "RG_NAME" : "",
+        "SOURCE_SITE_CS": "",
+        "SOURCE_SITE_CONTAINER": "",
+        "SAS" : ""
+    }
+}
