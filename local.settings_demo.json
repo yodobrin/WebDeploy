@@ -11,6 +11,7 @@
         "RG_NAME" : "",
         "SOURCE_SITE_CS": "",
         "SOURCE_SITE_CONTAINER": "",
-        "SAS" : ""
+        "SAS" : "",
+        "SQL_TOKEN_RESOURCE": "https://database.windows.net/"
     }
 }
